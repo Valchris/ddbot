@@ -54,6 +54,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="Data\Config.json" />
     <None Include="packages.config" />
     <None Include="README.md" />
   </ItemGroup>
