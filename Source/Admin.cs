@@ -21,7 +21,17 @@ namespace DDBot
 
         public async Task Run()
         {
-
+            do
+            {
+                Console.WriteLine("Type 'q' to terminate");
+                string input = Console.ReadLine();
+                switch (input) {
+                    case "q":
+                        return;
+                    default:
+                        break;
+                }
+            } while (true);
         }
     }
 }
