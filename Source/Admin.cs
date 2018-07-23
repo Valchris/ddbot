@@ -1,5 +1,7 @@
-﻿using DDBot.DependencyInjection;
+﻿using DDBot.Configuration;
+using DDBot.DependencyInjection;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using StructureMap;
 using System;
 using System.Collections.Generic;
@@ -11,8 +13,18 @@ namespace DDBot
 {
     public class Admin
     {
+        private readonly Secrets secrets;
+        private readonly Config config;
+
+        public Admin(Secrets secrets, Config config)
+        {
+            this.secrets = secrets;
+            this.config = config;
+        }
+
         static void Main(string[] args)
         {
+           
             var container = Container.For<ConsoleRegistry>();
 
             var app = container.GetInstance<Admin>();

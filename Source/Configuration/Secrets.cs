@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,13 +11,7 @@ namespace DDBot.Configuration
 {
     public class Secrets
     {
-        public readonly string AzureSentimentKey;
-        public readonly string DiscordKey;
-
-
-        public Secrets()
-        {
-            JObject.Parse(File.ReadAllText(@"Data\Secrets.json"));
-        }
+        public string AzureSentimentKey { get; set; }
+        public string DiscordKey { get; set; }
     }
 }

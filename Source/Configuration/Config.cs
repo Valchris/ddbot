@@ -6,7 +6,8 @@ using System.Threading.Tasks;
 
 namespace DDBot.Configuration
 {
-    class Config
+    public class Config
     {
+        public string DiscordUrl { get; set; }
     }
 }

@@ -1,6 +1,10 @@
-﻿using StructureMap;
+﻿using DDBot.Configuration;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
+using StructureMap;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,6 +22,15 @@ namespace DDBot.DependencyInjection
             });
             // requires explicit registration; doesn't follow convention
             For<ILog>().Use<ConsoleLogger>();
+            JsonConvert.DefaultSettings = () => new JsonSerializerSettings
+            {
+                Formatting = Formatting.Indented,
+                TypeNameHandling = TypeNameHandling.None,
+                ContractResolver = new CamelCasePropertyNamesContractResolver()
+            };
+
+            For<Secrets>().Use(JsonConvert.DeserializeObject<Secrets>(File.ReadAllText("Data/Secrets.json")));
+            For<Config>().Use(JsonConvert.DeserializeObject<Config>(File.ReadAllText("Data/Config.json")));
         }
     }
 
