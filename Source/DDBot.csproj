@@ -62,7 +62,6 @@
     <None Include="Data\Config.json" />
     <None Include="Data\Secrets.json" />
     <None Include="packages.config" />
-    <None Include="README.md" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Models\" />
