@@ -1,4 +1,5 @@
 ﻿using DDBot.Configuration;
+using DDBot.Listeners;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using StructureMap;
@@ -20,6 +21,7 @@ namespace DDBot.DependencyInjection
                 scan.TheCallingAssembly();
                 scan.WithDefaultConventions();
             });
+
             // requires explicit registration; doesn't follow convention
             For<ILog>().Use<ConsoleLogger>();
             JsonConvert.DefaultSettings = () => new JsonSerializerSettings

@@ -12,6 +12,6 @@ namespace DDBot.Configuration
     public class Secrets
     {
         public string AzureSentimentKey { get; set; }
-        public string DiscordKey { get; set; }
+        public string DiscordBotToken { get; set; }
     }
 }
