@@ -1,4 +1,5 @@
 ﻿using DDBot.DependencyInjection;
+using Newtonsoft.Json;
 using StructureMap;
 using System;
 using System.Collections.Generic;
