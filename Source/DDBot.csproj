@@ -117,8 +117,11 @@
     <Compile Include="Admin.cs" />
     <Compile Include="Listeners\DiscordListeners.cs" />
     <Compile Include="Listeners\IDiscordListeners.cs" />
+    <Compile Include="Models\SentimentScore.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Services\SentimentHistoryService.cs" />
     <Compile Include="Services\SentimentService.cs" />
+    <Compile Include="Services\SentimentSummaryService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -130,9 +133,7 @@
     </None>
     <None Include="packages.config" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Models\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

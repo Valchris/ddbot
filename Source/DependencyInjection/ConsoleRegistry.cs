@@ -28,7 +28,8 @@ namespace DDBot.DependencyInjection
             {
                 Formatting = Formatting.Indented,
                 TypeNameHandling = TypeNameHandling.None,
-                ContractResolver = new CamelCasePropertyNamesContractResolver()
+                ContractResolver = new CamelCasePropertyNamesContractResolver(),
+                ReferenceLoopHandling = ReferenceLoopHandling.Ignore
             };
 
             For<Secrets>().Use(JsonConvert.DeserializeObject<Secrets>(File.ReadAllText("Data/Secrets.json")));

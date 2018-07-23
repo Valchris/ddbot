@@ -1,15 +1,12 @@
 ﻿using DDBot.Configuration;
 using DDBot.DependencyInjection;
 using DDBot.Listeners;
+using DDBot.Models;
 using Discord;
 using Discord.WebSocket;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
 using StructureMap;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace DDBot
