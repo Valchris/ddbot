@@ -8,8 +8,6 @@ namespace DDBot.Configuration
 {
     public class Config
     {
-        public ulong BotUserId { get; set; }
-
         public int MessageRetentionInMinutes { get; set; }
 
         public int OnChannelJoinBootstrapMessageCount { get; set; }

@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Discord.Audio;
+using NAudio.Wave;
 
 namespace DDBot.Listeners
 {
@@ -31,16 +32,22 @@ namespace DDBot.Listeners
         private readonly SentimentService sentimentService;
         private readonly SentimentHistoryService sentimentHistoryService;
         private readonly SentimentSummaryService sentimentSummaryService;
-        private readonly SemaphoreSlim semaphore;
+        private readonly VoiceToTextService voiceToTextService;
+        private readonly SemaphoreSlim InitializedSempahore;
+        private readonly Dictionary<ulong, SemaphoreSlim> SpeakingSemaphores;
+        private readonly Dictionary<ulong, VoiceStream> UserChannels;
 
-        public DiscordListeners(Config config, DiscordSocketClient discordClient, SentimentService sentimentService, SentimentHistoryService sentimentHistoryService, SentimentSummaryService sentimentSummaryService)
+        public DiscordListeners(Config config, DiscordSocketClient discordClient, SentimentService sentimentService, SentimentHistoryService sentimentHistoryService, SentimentSummaryService sentimentSummaryService, VoiceToTextService voiceToTextService)
         {
             this.config = config;
             this.discordClient = discordClient;
             this.sentimentService = sentimentService;
             this.sentimentHistoryService = sentimentHistoryService;
             this.sentimentSummaryService = sentimentSummaryService;
-            this.semaphore = new SemaphoreSlim(1);
+            this.voiceToTextService = voiceToTextService;
+            this.InitializedSempahore = new SemaphoreSlim(1);
+            this.SpeakingSemaphores = new Dictionary<ulong, SemaphoreSlim>();
+            this.UserChannels = new Dictionary<ulong, VoiceStream>();
         }
 
         public Task Log(LogMessage msg)
@@ -51,7 +58,7 @@ namespace DDBot.Listeners
 
         public async Task MessageReceived(SocketMessage message)
         {
-            if(message.Author.Id == this.config.BotUserId)
+            if(message.Author.IsBot)
             {
                 return;
             }
@@ -103,6 +110,20 @@ namespace DDBot.Listeners
                 case "!memory":
                     await message.Channel.SendMessageAsync($"There are {sentimentHistoryService.GetMessages(message.Channel.Id)?.Count ?? 0} messages(s) stored for this channel.");
                     break;
+                case "!joinvoice":
+                    var author = message.Author as SocketGuildUser;
+                    if(author?.VoiceChannel?.Id != null)
+                    {
+                        await Task.Factory.StartNew(async () =>
+                        {
+                            var audioClient = await author.VoiceChannel.ConnectAsync();
+                        });
+                    }
+                    else
+                    {
+                        await message.Channel.SendMessageAsync($"You aren't in a voice channel, please connect first then re-issue command.");
+                    }
+                    break;
                 default:
                     var blocked = this.sentimentHistoryService.CheckSpamBlock(message);
                     if(!blocked)
@@ -116,7 +137,7 @@ namespace DDBot.Listeners
 
         public async Task Ready()
         {
-            await semaphore.WaitAsync();
+            await InitializedSempahore.WaitAsync();
             try
             {
                 var HasInitializedPath = "Data/HasInitialized.json";
@@ -164,7 +185,7 @@ namespace DDBot.Listeners
             }
             finally
             {
-                semaphore.Release();
+                InitializedSempahore.Release();
             }
         }
 
@@ -173,12 +194,86 @@ namespace DDBot.Listeners
             await this.Ready();
         }
 
-        public async Task UserVoiceStateUpdated(SocketUser arg1, SocketVoiceState arg2, SocketVoiceState arg3)
+        public async Task UserVoiceStateUpdated(SocketUser user, SocketVoiceState from, SocketVoiceState to)
         {
-            var x = await arg2.VoiceChannel.ConnectAsync();
-            // x.StreamCreated += streamCreated
+            if(user.Id == discordClient.CurrentUser.Id)
+            {
+                var guildUser = user as SocketGuildUser;
+                if(to.VoiceChannel != null && guildUser != null)
+                {
 
+                    // On join, populate all the existing users
+                    foreach(var cu in to.VoiceChannel.Users)
+                    {
+                        UserChannels[cu.Id] = new VoiceStream(to.VoiceChannel.Id);
+                    }
+
+                    Console.WriteLine(user.GetType());
+                    Console.WriteLine(to.GetType());
+                    guildUser.Guild.AudioClient.Connected += AudioConnected;
+                    guildUser.Guild.AudioClient.StreamCreated += StreamCreated;
+                    guildUser.Guild.AudioClient.SpeakingUpdated += SpeakingUpdated;
+                }
+                Console.WriteLine($"Bot voice state change: {user.Username}, to: {from}, from: {to}");
+            }
+            else
+            {
+                // Once joined, track changes as they come
+                if(to.VoiceChannel?.Id == null)
+                {
+                    UserChannels.Remove(user.Id);
+                }
+                else
+                {
+                    UserChannels[user.Id] = new VoiceStream(to.VoiceChannel.Id);
+                }
+            }
         }
+
+        private async Task SpeakingUpdated(ulong authorId, bool isSpeaking)
+        {
+            VoiceStream currentValue;
+            if(UserChannels.TryGetValue(authorId, out currentValue))
+            {
+                // Was speaking, is now stopped
+                if(currentValue.IsSpeaking == true && isSpeaking == false)
+                {
+                    var previous = currentValue.Stream;
+                    previous.Flush();
+                    previous.Close();
+                    await this.voiceToTextService.ProcessVoiceToText(previous, (previous as FileStream).Name);
+                    
+                }
+                currentValue.IsSpeaking = isSpeaking;
+            }
+            Console.WriteLine($"Speaking Updated for {authorId}, VoiceMemoryStream: {UserChannels[authorId]}, isSpeaking: {isSpeaking}");
+        }
+
+        private async Task StreamCreated(ulong id, AudioInStream audio)
+        {
+            Console.WriteLine($"Stream created: {id}, {audio}");
+            var streamCancelToken = new CancellationToken();
+            await Task.Factory.StartNew(async () =>
+            {
+                using(var file = UserChannels[id].Stream)
+                {
+                    var writer = new WaveFileWriter(file, new WaveFormat(46000, 2));
+                    while(!streamCancelToken.IsCancellationRequested)
+                    {
+                        RTPFrame frame = await audio.ReadFrameAsync(streamCancelToken);
+                        writer.Write(frame.Payload, 0, frame.Payload.Length);
+                        writer.Flush();
+                        Console.WriteLine($"AudioFrameReceived, {frame.Payload.Length}, {frame.Sequence}");
+                    }
+                }
+            }, streamCancelToken);
+        }
+
+        private async Task AudioConnected()
+        {
+            Console.WriteLine("Audio connected");
+        }
+
 
         //private Task streamCreated(ulong arg1, AudioInStream arg2)
         //{
