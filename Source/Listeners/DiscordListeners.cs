@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DDBot.Listeners
@@ -20,16 +21,16 @@ namespace DDBot.Listeners
         private readonly SentimentService sentimentService;
         private readonly SentimentHistoryService sentimentHistoryService;
         private readonly SentimentSummaryService sentimentSummaryService;
-        private bool InitializedStarted;
+        private readonly SemaphoreSlim semaphore;
 
         public DiscordListeners(Config config, DiscordSocketClient discordClient, SentimentService sentimentService, SentimentHistoryService sentimentHistoryService, SentimentSummaryService sentimentSummaryService)
         {
-            this.InitializedStarted = false;
             this.config = config;
             this.discordClient = discordClient;
             this.sentimentService = sentimentService;
             this.sentimentHistoryService = sentimentHistoryService;
             this.sentimentSummaryService = sentimentSummaryService;
+            this.semaphore = new SemaphoreSlim(1);
         }
 
         public Task Log(LogMessage msg)
@@ -102,45 +103,53 @@ namespace DDBot.Listeners
 
         public async Task Ready()
         {
-            // Quick abort to prevent multiple runs
-            if (this.InitializedStarted) return;
-
-            // Mark this threas as active (weaker than semaphore locking)
-            this.InitializedStarted = true;
-            var HasInitializedPath = "Data/HasInitialized.json";
-            var initialized = new List<HasInitialized>();
-            var guilds = this.discordClient.Guilds;
-            var channels = guilds.SelectMany(x => x.Channels).Where(z => z as IMessageChannel != null).Select(y => y as IMessageChannel);
+            await semaphore.WaitAsync();
+            try
+            {
+                var HasInitializedPath = "Data/HasInitialized.json";
+                var initialized = new List<HasInitialized>();
+                var guilds = this.discordClient.Guilds;
+                var channels = guilds.SelectMany(x => x.Channels).Where(z => z as IMessageChannel != null).Select(y => y as IMessageChannel);
             
-            // Remove anything already initialized
-            if (File.Exists(HasInitializedPath))
-            {
-                initialized = JsonConvert.DeserializeObject<List<HasInitialized>>(File.ReadAllText(HasInitializedPath));
-                channels = channels.Where(x => !initialized.Where(y => y.channelId == x.Id).Any());
-            }
-
-            // Iterate all uninitialized channels and bootstrap messages
-            foreach (var channel in channels)
-            {
-                var messages = channel.GetMessagesAsync(250, CacheMode.AllowDownload);
-                await messages.ForEachAsync(async (messageSet) =>
+                // Remove anything already initialized
+                if (File.Exists(HasInitializedPath))
                 {
-                    if(messageSet.Count() > 0)
+                    initialized = JsonConvert.DeserializeObject<List<HasInitialized>>(File.ReadAllText(HasInitializedPath));
+                    channels = channels.Where(x => !initialized.Where(y => y.channelId == x.Id).Any());
+                }
+
+                // Iterate all uninitialized channels and bootstrap messages
+                foreach (var channel in channels)
+                {
+                    var messages = channel.GetMessagesAsync(250, CacheMode.AllowDownload);
+                    await messages.ForEachAsync(async (messageSet) =>
                     {
-                        var sentimentScores = await this.sentimentService.AnalyzeMessage(messageSet.ToList());
-                        await this.sentimentHistoryService.StoreMessage(sentimentScores);
-                    }
-                });
+                        if(messageSet.Count() > 0)
+                        {
+                            var sentimentScores = await this.sentimentService.AnalyzeMessage(messageSet.ToList());
+                            await this.sentimentHistoryService.StoreMessage(sentimentScores);
+                        }
+                    });
 
-                // Mark as initialized
-                initialized.Add(new HasInitialized()
-                {
-                    channelId = channel.Id,
-                    timestamp = DateTime.UtcNow
-                });
+                    // Mark as initialized
+                    initialized.Add(new HasInitialized()
+                    {
+                        channelId = channel.Id,
+                        timestamp = DateTime.UtcNow
+                    });
+                }
+
+                File.WriteAllText(HasInitializedPath, JsonConvert.SerializeObject(initialized));
             }
+            finally
+            {
+                semaphore.Release();
+            }
+        }
 
-            File.WriteAllText(HasInitializedPath, JsonConvert.SerializeObject(initialized));
+        public async Task JoinedGuild(SocketGuild guild)
+        {
+            await this.Ready();
         }
     }
 }

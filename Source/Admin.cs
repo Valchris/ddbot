@@ -46,6 +46,7 @@ namespace DDBot
             var listeners = Admin.DI.GetInstance<IDiscordListeners>();
 
             discordClient.Ready += listeners.Ready;
+            discordClient.JoinedGuild += listeners.JoinedGuild;
             discordClient.Log += listeners.Log;
             discordClient.MessageReceived += listeners.MessageReceived;
 

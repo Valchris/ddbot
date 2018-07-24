@@ -15,5 +15,6 @@ namespace DDBot.Listeners
         Task MessageReceived(SocketMessage message);
 
         Task Ready();
+        Task JoinedGuild(SocketGuild guild);
     }
 }
