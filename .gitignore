@@ -7,3 +7,5 @@
 /bin/*
 .suo
 /Data/Secrets.json
+/Source/Data/DataStore.json
+/Source/Data/datastore.tsv

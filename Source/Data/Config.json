@@ -1,3 +1,4 @@
 ﻿{
-  "discordUrl" :  "Test"
+  "botUserId": 471030529861353481,
+  "messageRetentionInMinutes":  525600
 }

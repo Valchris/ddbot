@@ -8,6 +8,8 @@ namespace DDBot.Configuration
 {
     public class Config
     {
-        public string DiscordUrl { get; set; }
+        public ulong BotUserId { get; set; }
+
+        public int MessageRetentionInMinutes { get; set; }
     }
 }

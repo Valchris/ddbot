@@ -2,6 +2,7 @@
 using DDBot.DependencyInjection;
 using DDBot.Listeners;
 using DDBot.Models;
+using DDBot.Services;
 using Discord;
 using Discord.WebSocket;
 using StructureMap;

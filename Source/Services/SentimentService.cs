@@ -48,9 +48,10 @@ namespace DDBot.Services
                     var latestScore = new SentimentScore()
                     {
                         Author = messages[i].Author.Username,
+                        AuthorId = messages[i].Author.Id,
                         ChannelId = messages[i].Channel.Id,
                         Score = result.Documents[i].Score ?? -1,
-                        Timestamp = messages[i].Timestamp
+                        Timestamp = messages[i].Timestamp.UtcDateTime
 
                     };
 

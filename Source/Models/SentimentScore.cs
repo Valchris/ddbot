@@ -11,10 +11,12 @@ namespace DDBot.Models
     {
         public string Author { get; set; }
 
+        public ulong AuthorId { get; set; }
+
         public ulong ChannelId { get; set; }
 
         public double Score { get; set; }
 
-        public DateTimeOffset Timestamp { get; set; }
+        public DateTime Timestamp { get; set; }
     }
 }
