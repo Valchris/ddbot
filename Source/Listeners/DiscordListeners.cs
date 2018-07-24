@@ -76,8 +76,8 @@ namespace DDBot.Listeners
                     }
 
                     var analysisOutputSet = users.OrderBy(y => y.Value).Select(x => $"{x.Key}: {(x.Value * 100).ToString("0.00")}%");
-                    
-                    await message.Channel.SendMessageAsync($"__User Scores__ \n{string.Join("\n", analysisOutputSet)}");
+
+                    await message.Channel.SendMessageAsync($"**User Scores**\n```fix\n{string.Join("\n", analysisOutputSet)}```");
                     break;
                 case "!memory":
                     await message.Channel.SendMessageAsync($"There are {sentimentHistoryService.GetMessages(message.Channel.Id)?.Count ?? 0} messages(s) stored for this channel.");
