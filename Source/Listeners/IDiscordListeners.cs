@@ -13,5 +13,7 @@ namespace DDBot.Listeners
         Task Log(LogMessage msg);
 
         Task MessageReceived(SocketMessage message);
+
+        Task Ready();
     }
 }

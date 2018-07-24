@@ -5,9 +5,12 @@ using DDBot.Models;
 using DDBot.Services;
 using Discord;
 using Discord.WebSocket;
+using Newtonsoft.Json;
 using StructureMap;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace DDBot
@@ -15,6 +18,7 @@ namespace DDBot
     public class Admin
     {
         public static IContainer DI;
+        private static DiscordSocketClient discordClient = new DiscordSocketClient();
         private readonly Secrets secrets;
         private readonly Config config;
 
@@ -31,6 +35,7 @@ namespace DDBot
             DI = container;
 
             var app = container.GetInstance<Admin>();
+            container.Inject<DiscordSocketClient>(discordClient);
             app.Run().GetAwaiter().GetResult();
         }
 
@@ -40,12 +45,12 @@ namespace DDBot
         {
             var listeners = Admin.DI.GetInstance<IDiscordListeners>();
 
-            var discordClient = new DiscordSocketClient();
+            discordClient.Ready += listeners.Ready;
             discordClient.Log += listeners.Log;
             discordClient.MessageReceived += listeners.MessageReceived;
 
             await discordClient.LoginAsync(TokenType.Bot, secrets.DiscordBotToken);
-            await discordClient.StartAsync();
+            discordClient.StartAsync().GetAwaiter().GetResult();
 
             do
             {
@@ -59,5 +64,6 @@ namespace DDBot
                 }
             } while (true);
         }
+        
     }
 }

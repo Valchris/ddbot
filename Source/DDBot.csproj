@@ -118,6 +118,7 @@
     <Compile Include="Listeners\DiscordListeners.cs" />
     <Compile Include="Listeners\IDiscordListeners.cs" />
     <Compile Include="Models\AggregatedScore.cs" />
+    <Compile Include="Models\HasInitialized.cs" />
     <Compile Include="Models\SentimentScore.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\SentimentHistoryService.cs" />

@@ -1,9 +1,12 @@
 ﻿using DDBot.Configuration;
+using DDBot.Models;
 using DDBot.Services;
 using Discord;
 using Discord.WebSocket;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,13 +16,17 @@ namespace DDBot.Listeners
     public class DiscordListeners : IDiscordListeners
     {
         private readonly Config config;
+        private readonly DiscordSocketClient discordClient;
         private readonly SentimentService sentimentService;
         private readonly SentimentHistoryService sentimentHistoryService;
         private readonly SentimentSummaryService sentimentSummaryService;
+        private bool InitializedStarted;
 
-        public DiscordListeners(Config config, SentimentService sentimentService, SentimentHistoryService sentimentHistoryService, SentimentSummaryService sentimentSummaryService)
+        public DiscordListeners(Config config, DiscordSocketClient discordClient, SentimentService sentimentService, SentimentHistoryService sentimentHistoryService, SentimentSummaryService sentimentSummaryService)
         {
+            this.InitializedStarted = false;
             this.config = config;
+            this.discordClient = discordClient;
             this.sentimentService = sentimentService;
             this.sentimentHistoryService = sentimentHistoryService;
             this.sentimentSummaryService = sentimentSummaryService;
@@ -86,12 +93,54 @@ namespace DDBot.Listeners
                     var blocked = this.sentimentHistoryService.CheckSpamBlock(message);
                     if(!blocked)
                     {
-                        var result = await sentimentService.AnalyzeMessage(new List<SocketMessage>() { message });
+                        var result = await sentimentService.AnalyzeMessage(new List<IMessage>() { message });
                         this.sentimentHistoryService.StoreMessage(result);
                     }
                     return;
             }
         }
 
+        public async Task Ready()
+        {
+            // Quick abort to prevent multiple runs
+            if (this.InitializedStarted) return;
+
+            // Mark this threas as active (weaker than semaphore locking)
+            this.InitializedStarted = true;
+            var HasInitializedPath = "Data/HasInitialized.json";
+            var Initialized = new List<HasInitialized>();
+            var guilds = this.discordClient.Guilds;
+            var channels = guilds.SelectMany(x => x.Channels).Where(z => z as IMessageChannel != null).Select(y => y as IMessageChannel);
+
+            // Remove anything already initialized
+            if (File.Exists(HasInitializedPath))
+            {
+                var previouslyInitialized = JsonConvert.DeserializeObject<List<HasInitialized>>(File.ReadAllText(HasInitializedPath));
+                channels = channels.Where(x => previouslyInitialized.Where(y => y.channelId == x.Id).Any());
+            }
+
+            // Iterate all uninitialized channels and bootstrap messages
+            foreach (var channel in channels)
+            {
+                var messages = channel.GetMessagesAsync(5, CacheMode.AllowDownload);
+                await messages.ForEachAsync(async (messageSet) =>
+                {
+                    if(messageSet.Count() > 0)
+                    {
+                        var sentimentScores = await this.sentimentService.AnalyzeMessage(messageSet.ToList());
+                        this.sentimentHistoryService.StoreMessage(sentimentScores);
+                    }
+                });
+
+                // Mark as initialized
+                Initialized.Add(new HasInitialized()
+                {
+                    channelId = channel.Id,
+                    timestamp = DateTime.UtcNow
+                });
+            }
+
+            File.WriteAllText(HasInitializedPath, JsonConvert.SerializeObject(Initialized));
+        }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using DDBot.Configuration;
 using DDBot.Models;
+using Discord;
 using Discord.WebSocket;
 using Microsoft.Azure.CognitiveServices.Language.TextAnalytics;
 using Microsoft.Azure.CognitiveServices.Language.TextAnalytics.Models;
@@ -27,7 +28,7 @@ namespace DDBot.Services
             this.client.AzureRegion = AzureRegions.Westus2;
         }
 
-        public async Task<List<SentimentScore>> AnalyzeMessage(List<SocketMessage> messages)
+        public async Task<List<SentimentScore>> AnalyzeMessage(List<IMessage> messages)
         {
             var inputs = new List<MultiLanguageInput>();
             var i = 0;
@@ -54,6 +55,7 @@ namespace DDBot.Services
                         Timestamp = messages[i].Timestamp.UtcDateTime
 
                     };
+                    i++;
 
                     output.Add(latestScore);
                     Console.WriteLine($"Score logged: {latestScore.Author}: {latestScore.Score}. Channel: {latestScore.ChannelId}, Timestamp: {latestScore.Timestamp}");
