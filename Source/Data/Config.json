@@ -1,4 +1,5 @@
 ﻿{
   "botUserId": 471030529861353481,
-  "messageRetentionInMinutes":  525600
+  "messageRetentionInMinutes": 525600,
+  "onChannelJoinBootstrapMessageCount" :  50
 }

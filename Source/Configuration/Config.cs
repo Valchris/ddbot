@@ -11,5 +11,7 @@ namespace DDBot.Configuration
         public ulong BotUserId { get; set; }
 
         public int MessageRetentionInMinutes { get; set; }
+
+        public int OnChannelJoinBootstrapMessageCount { get; set; }
     }
 }

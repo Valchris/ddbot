@@ -11,11 +11,21 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Discord.Audio;
 
 namespace DDBot.Listeners
 {
     public class DiscordListeners : IDiscordListeners
     {
+        private const string HelpText =
+@"**Available commands**
+```
+!sentiment - Your personal sentiment score
+!analysis - The overall analysis for the channel
+!memory - how many scores are stored for this channel
+!joinvoice - joins the voice you are currently connected to
+```";
+
         private readonly Config config;
         private readonly DiscordSocketClient discordClient;
         private readonly SentimentService sentimentService;
@@ -47,6 +57,9 @@ namespace DDBot.Listeners
             }
             switch(message.Content)
             {
+                case "!help":
+                    await message.Channel.SendMessageAsync(HelpText);
+                        break;
                 case "!ping":
                     await message.Channel.SendMessageAsync("Pong!");
                     break;
@@ -121,15 +134,23 @@ namespace DDBot.Listeners
                 // Iterate all uninitialized channels and bootstrap messages
                 foreach (var channel in channels)
                 {
-                    var messages = channel.GetMessagesAsync(250, CacheMode.AllowDownload);
-                    await messages.ForEachAsync(async (messageSet) =>
+                    // TODO: check access first, do not initialize channels with no permissions
+                    var messages = channel.GetMessagesAsync(config.OnChannelJoinBootstrapMessageCount, CacheMode.AllowDownload);
+                    try
                     {
-                        if(messageSet.Count() > 0)
+                        await messages.ForEachAsync(async (messageSet) =>
                         {
-                            var sentimentScores = await this.sentimentService.AnalyzeMessage(messageSet.ToList());
-                            await this.sentimentHistoryService.StoreMessage(sentimentScores);
-                        }
-                    });
+                            if (messageSet.Count() > 0)
+                            {
+                                var sentimentScores = await this.sentimentService.AnalyzeMessage(messageSet.ToList());
+                                await this.sentimentHistoryService.StoreMessage(sentimentScores);
+                            }
+                        });
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"Cannot initialize a channel: {e} ");
+                    }
 
                     // Mark as initialized
                     initialized.Add(new HasInitialized()
@@ -151,5 +172,17 @@ namespace DDBot.Listeners
         {
             await this.Ready();
         }
+
+        public async Task UserVoiceStateUpdated(SocketUser arg1, SocketVoiceState arg2, SocketVoiceState arg3)
+        {
+            var x = await arg2.VoiceChannel.ConnectAsync();
+            // x.StreamCreated += streamCreated
+
+        }
+
+        //private Task streamCreated(ulong arg1, AudioInStream arg2)
+        //{
+        //    arg2.
+        //}
     }
 }

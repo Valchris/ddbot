@@ -16,5 +16,6 @@ namespace DDBot.Listeners
 
         Task Ready();
         Task JoinedGuild(SocketGuild guild);
+        Task UserVoiceStateUpdated(SocketUser arg1, SocketVoiceState arg2, SocketVoiceState arg3);
     }
 }

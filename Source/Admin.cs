@@ -4,6 +4,7 @@ using DDBot.Listeners;
 using DDBot.Models;
 using DDBot.Services;
 using Discord;
+using Discord.Audio;
 using Discord.WebSocket;
 using Newtonsoft.Json;
 using StructureMap;
@@ -45,6 +46,8 @@ namespace DDBot
         {
             var listeners = Admin.DI.GetInstance<IDiscordListeners>();
 
+
+            discordClient.UserVoiceStateUpdated += listeners.UserVoiceStateUpdated;
             discordClient.Ready += listeners.Ready;
             discordClient.JoinedGuild += listeners.JoinedGuild;
             discordClient.Log += listeners.Log;
