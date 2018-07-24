@@ -9,3 +9,9 @@
 /Data/Secrets.json
 /Source/Data/DataStore.json
 /Source/Data/datastore.tsv
+/.vs/ddbot/v15/Server/sqlite3/storage.ide-wal
+/.vs/ddbot/v15/Server/sqlite3/storage.ide-shm
+/.vs/ddbot/v15/Server/sqlite3/storage.ide
+/.vs/ddbot/v15/Server/sqlite3/db.lock
+/.vs/ddbot/v15/Server/sqlite3
+/.vs/ddbot/DesignTimeBuild/.dtbcache
