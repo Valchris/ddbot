@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Discord.WebSocket;
 
 namespace DDBot.Services
 {
@@ -38,7 +39,7 @@ namespace DDBot.Services
                             Score = double.Parse(parts[3]),
                             Timestamp = DateTime.Parse(parts[4])
                         };
-                        var list = this.CreateListIfNeeded(score);
+                        var list = this.CreateListIfNeeded(score.ChannelId.ToString());
                         list.AddLast(score);
                     }
                     else
@@ -49,14 +50,14 @@ namespace DDBot.Services
             }
         }
 
-        private LinkedList<SentimentScore> CreateListIfNeeded(SentimentScore score)
+        private LinkedList<SentimentScore> CreateListIfNeeded(string channelId)
         {
             // Each Channel is stored by it's unique identifier, find or create the channel containing sentiment scores
             LinkedList<SentimentScore> channelList = null;
-            if (!this.scores.TryGetValue(score.ChannelId.ToString(), out channelList))
+            if (!this.scores.TryGetValue(channelId, out channelList))
             {
                 channelList = new LinkedList<SentimentScore>();
-                this.scores[score.ChannelId.ToString()] = channelList;
+                this.scores[channelId] = channelList;
             }
 
             return channelList;
@@ -66,7 +67,8 @@ namespace DDBot.Services
         {
             foreach(var score in input)
             {
-                var channelList = CreateListIfNeeded(score);
+                var channelList = CreateListIfNeeded(score.ChannelId.ToString());
+
 
                 // Add message to end of LinkedList
                 channelList.AddLast(score);
@@ -82,6 +84,12 @@ namespace DDBot.Services
                     channelList.RemoveFirst();
                 }
             }
+        }
+
+        public bool CheckSpamBlock(SocketMessage message)
+        {
+            var channelList = this.CreateListIfNeeded(message.Channel.Id.ToString());
+            return channelList.Last.Value.AuthorId == message.Author.Id && channelList.Last?.Previous?.Value?.AuthorId == message.Author.Id;
         }
 
         public LinkedList<SentimentScore> GetMessages(ulong channelId)
