@@ -94,7 +94,7 @@ namespace DDBot.Listeners
                     if(!blocked)
                     {
                         var result = await sentimentService.AnalyzeMessage(new List<IMessage>() { message });
-                        this.sentimentHistoryService.StoreMessage(result);
+                        await this.sentimentHistoryService.StoreMessage(result);
                     }
                     return;
             }
@@ -108,39 +108,39 @@ namespace DDBot.Listeners
             // Mark this threas as active (weaker than semaphore locking)
             this.InitializedStarted = true;
             var HasInitializedPath = "Data/HasInitialized.json";
-            var Initialized = new List<HasInitialized>();
+            var initialized = new List<HasInitialized>();
             var guilds = this.discordClient.Guilds;
             var channels = guilds.SelectMany(x => x.Channels).Where(z => z as IMessageChannel != null).Select(y => y as IMessageChannel);
-
+            
             // Remove anything already initialized
             if (File.Exists(HasInitializedPath))
             {
-                var previouslyInitialized = JsonConvert.DeserializeObject<List<HasInitialized>>(File.ReadAllText(HasInitializedPath));
-                channels = channels.Where(x => previouslyInitialized.Where(y => y.channelId == x.Id).Any());
+                initialized = JsonConvert.DeserializeObject<List<HasInitialized>>(File.ReadAllText(HasInitializedPath));
+                channels = channels.Where(x => !initialized.Where(y => y.channelId == x.Id).Any());
             }
 
             // Iterate all uninitialized channels and bootstrap messages
             foreach (var channel in channels)
             {
-                var messages = channel.GetMessagesAsync(5, CacheMode.AllowDownload);
+                var messages = channel.GetMessagesAsync(250, CacheMode.AllowDownload);
                 await messages.ForEachAsync(async (messageSet) =>
                 {
                     if(messageSet.Count() > 0)
                     {
                         var sentimentScores = await this.sentimentService.AnalyzeMessage(messageSet.ToList());
-                        this.sentimentHistoryService.StoreMessage(sentimentScores);
+                        await this.sentimentHistoryService.StoreMessage(sentimentScores);
                     }
                 });
 
                 // Mark as initialized
-                Initialized.Add(new HasInitialized()
+                initialized.Add(new HasInitialized()
                 {
                     channelId = channel.Id,
                     timestamp = DateTime.UtcNow
                 });
             }
 
-            File.WriteAllText(HasInitializedPath, JsonConvert.SerializeObject(Initialized));
+            File.WriteAllText(HasInitializedPath, JsonConvert.SerializeObject(initialized));
         }
     }
 }

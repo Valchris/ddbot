@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Discord.WebSocket;
+using System.Threading;
 
 namespace DDBot.Services
 {
@@ -16,37 +17,48 @@ namespace DDBot.Services
         private const string DataFilePath = "Data/DataStore.tsv";
         private readonly Dictionary<string, LinkedList<SentimentScore>> scores;
         private readonly Config config;
+        private readonly SemaphoreSlim semaphore;
 
         public SentimentHistoryService(Config config)
         {
+            this.semaphore = new SemaphoreSlim(1);
             this.scores = new Dictionary<string, LinkedList<SentimentScore>>();
             this.config = config;
 
-            // bootstrap existing data
-            if(File.Exists(DataFilePath))
+            semaphore.Wait();
+            try
             {
-                var dbLines = File.ReadAllLines(DataFilePath);
-                foreach(var line in dbLines)
+                // bootstrap existing data
+                if(File.Exists(DataFilePath))
                 {
-                    var parts = line.Split('\t');
-                    if(parts.Length == 5)
+                    var dbLines = File.ReadAllLines(DataFilePath);
+                    foreach(var line in dbLines)
                     {
-                        var score = new SentimentScore()
+                        var parts = line.Split('\t');
+                        if(parts.Length == 5)
                         {
-                            Author = parts[0],
-                            AuthorId = ulong.Parse(parts[1]),
-                            ChannelId = ulong.Parse(parts[2]),
-                            Score = double.Parse(parts[3]),
-                            Timestamp = DateTime.Parse(parts[4])
-                        };
-                        var list = this.CreateListIfNeeded(score.ChannelId.ToString());
-                        list.AddLast(score);
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Invalid bootstrap data in {DataFilePath}, data: {line}");
+                            var score = new SentimentScore()
+                            {
+                                Author = parts[0],
+                                AuthorId = ulong.Parse(parts[1]),
+                                ChannelId = ulong.Parse(parts[2]),
+                                Score = double.Parse(parts[3]),
+                                Timestamp = DateTime.Parse(parts[4])
+                            };
+                            var list = this.CreateListIfNeeded(score.ChannelId.ToString());
+                            list.AddLast(score);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Invalid bootstrap data in {DataFilePath}, data: {line}");
+                        }
                     }
                 }
+            }
+            finally
+            {
+                semaphore.Release();
+
             }
         }
 
@@ -63,7 +75,7 @@ namespace DDBot.Services
             return channelList;
         }
 
-        public void StoreMessage(List<SentimentScore> input)
+        public async Task StoreMessage(List<SentimentScore> input)
         {
             foreach(var score in input)
             {
@@ -72,16 +84,25 @@ namespace DDBot.Services
 
                 // Add message to end of LinkedList
                 channelList.AddLast(score);
-                File.AppendAllLines(DataFilePath, new List<string>()
+                await semaphore.WaitAsync();
+                try
                 {
-                    score.Author + '\t' + score.AuthorId + '\t' + score.ChannelId + '\t' + score.Score + '\t' + score.Timestamp.ToUniversalTime()
-                });
+
+                    File.AppendAllLines(DataFilePath, new List<string>()
+                    {
+                        score.Author + '\t' + score.AuthorId + '\t' + score.ChannelId + '\t' + score.Score + '\t' + score.Timestamp.ToUniversalTime()
+                    });
 
 
-                // Whenever we add an old score, we prune any that exceed the config timeout duration
-                while(channelList.First.Value.Timestamp < DateTime.UtcNow.AddMinutes(0 - this.config.MessageRetentionInMinutes))
+                    // Whenever we add an old score, we prune any that exceed the config timeout duration
+                    while(channelList.First.Value.Timestamp < DateTime.UtcNow.AddMinutes(0 - this.config.MessageRetentionInMinutes))
+                    {
+                        channelList.RemoveFirst();
+                    }
+                }
+                finally
                 {
-                    channelList.RemoveFirst();
+                    semaphore.Release();
                 }
             }
         }
