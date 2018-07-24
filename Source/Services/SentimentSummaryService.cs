@@ -35,9 +35,39 @@ namespace DDBot.Services
             return (acc / userScores.Count());
         }
 
-        public void GenerateChannelAnalysis(ulong channelId)
+        public Dictionary<string, AggregatedScore> GenerateChannelAnalysis(ulong channelId)
         {
+            Dictionary<string, AggregatedScore> output = new Dictionary<string, AggregatedScore>();
+            LinkedList<SentimentScore> scores = this.sentimentHistoryService.GetMessages(channelId);
+            var userGroups = scores?.GroupBy(x => x.Author);
 
+            foreach(var userGroup in userGroups)
+            {
+                var dayBuckets = userGroup.GroupBy(x => x.Timestamp.DayOfYear);
+
+                double acc = 0;
+                int count = 0;
+                foreach(var dayScores in dayBuckets)
+                {
+                    foreach(var val in dayScores)
+                    {
+                        acc += val.Score;
+                        count += 1;   
+                    }
+
+                    var aggScore = new AggregatedScore()
+                    {
+                        Author = dayScores.First().Author,
+                        AuthorId = dayScores.First().AuthorId,
+                        Score = acc,
+                        Count = count
+                    };
+
+                    output[$"{dayScores.First().Author}-{dayScores.First().Timestamp.DayOfYear}"] = aggScore;
+                }
+            }
+
+            return output;
         }
     }
 }

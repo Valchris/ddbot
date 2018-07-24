@@ -58,7 +58,26 @@ namespace DDBot.Listeners
                     }
                     break;
                 case "!analysis":
+                    var userDaySummary = this.sentimentSummaryService.GenerateChannelAnalysis(message.Channel.Id);
+                    var userLevel = userDaySummary.GroupBy(x => x.Key.Split('-')[0]);
+                    Dictionary<string, double> users = new Dictionary<string, double>();
 
+                    double acc = 0;
+                    int count = 0;
+                    foreach(var userData in userLevel)
+                    {
+                        foreach(var d in userData)
+                        {
+                            acc += d.Value.Score;
+                            count += d.Value.Count;
+                        }
+
+                        users[userData.Key] = acc / count;
+                    }
+
+                    var analysisOutputSet = users.OrderBy(y => y.Value).Select(x => $"{x.Key}: {(x.Value * 100).ToString("0.00")}%");
+                    
+                    await message.Channel.SendMessageAsync($"__User Scores__ \n{string.Join("\n", analysisOutputSet)}");
                     break;
                 case "!memory":
                     await message.Channel.SendMessageAsync($"There are {sentimentHistoryService.GetMessages(message.Channel.Id)?.Count ?? 0} messages(s) stored for this channel.");
