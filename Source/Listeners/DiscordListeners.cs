@@ -91,10 +91,10 @@ namespace DDBot.Listeners
                     var userLevel = userDaySummary.GroupBy(x => x.Key.Split('-')[0]);
                     Dictionary<string, double> users = new Dictionary<string, double>();
 
-                    double acc = 0;
-                    int count = 0;
                     foreach(var userData in userLevel)
                     {
+                        double acc = 0;
+                        int count = 0;
                         foreach(var d in userData)
                         {
                             acc += d.Value.Score;
