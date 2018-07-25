@@ -238,10 +238,7 @@ namespace DDBot.Listeners
                 // Was speaking, is now stopped
                 if(currentValue.IsSpeaking == true && isSpeaking == false)
                 {
-                    var previous = currentValue.Stream;
-                    previous.Flush();
-                    previous.Close();
-                    await this.voiceToTextService.ProcessVoiceToText(previous, (previous as FileStream).Name);
+                    await this.voiceToTextService.ProcessVoiceToText(currentValue.Stream);
                     
                 }
                 currentValue.IsSpeaking = isSpeaking;
@@ -255,17 +252,25 @@ namespace DDBot.Listeners
             var streamCancelToken = new CancellationToken();
             await Task.Factory.StartNew(async () =>
             {
-                using(var file = UserChannels[id].Stream)
+                try
                 {
-                    var writer = new WaveFileWriter(file, new WaveFormat(46000, 2));
-                    while(!streamCancelToken.IsCancellationRequested)
+                    var stream = UserChannels[id].Stream;
+                    var writer = new RawSourceWaveStream(stream, new WaveFormat(64000, 2));
+                    int frameCount = 0;
+                    while (!streamCancelToken.IsCancellationRequested)
                     {
                         RTPFrame frame = await audio.ReadFrameAsync(streamCancelToken);
-                        writer.Write(frame.Payload, 0, frame.Payload.Length);
-                        writer.Flush();
+                        stream.Write(frame.Payload, 0, frame.Payload.Length);
                         Console.WriteLine($"AudioFrameReceived, {frame.Payload.Length}, {frame.Sequence}");
+
+                        //if (frameCount++ % 100 == 0)
+                        //{
+                        //    stream.Flush();
+                        //    await this.voiceToTextService.ProcessVoiceToText(stream);
+                        //}
                     }
                 }
+                catch (Exception e) { Console.WriteLine(e); }
             }, streamCancelToken);
         }
 

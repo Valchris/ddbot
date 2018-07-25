@@ -14,6 +14,7 @@ namespace DDBot.Services
     {
         private readonly Syn.Speech.Api.Configuration config;
         private readonly StreamSpeechRecognizer speechRecognizer;
+        private const int InputRate = 16000;
 
         public VoiceToTextService()
         {
@@ -23,35 +24,30 @@ namespace DDBot.Services
                 AcousticModelPath = speechModelsDir,
                 DictionaryPath = Path.Combine(speechModelsDir, "cmudict-en-us.dict"),
                 LanguageModelPath = Path.Combine(speechModelsDir, "en-us.lm.dmp"),
+                SampleRate = InputRate
             };
             this.speechRecognizer = new StreamSpeechRecognizer(config);
         }
 
-        public async Task<string> ProcessVoiceToText(Stream s, string name)
+        public async Task<string> ProcessVoiceToText(Stream stream)
         {
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            Task.Factory.StartNew(() =>
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            {
-                using (var stream = new WaveFileReader("converted.wav"))
-                {
-                    var newFormat = new WaveFormat(16000, 16, 1);
-                    WaveFormatConversionStream cs = new WaveFormatConversionStream(newFormat, stream);
+            stream.Seek(0, SeekOrigin.Begin);
+            var wavStream = new RawSourceWaveStream(stream, new WaveFormat(64000, 2));
+            // WaveFileWriter.CreateWaveFile("fn-source.wav", wavStream);
 
-                    WaveFileWriter.CreateWaveFile("converted.wav", cs);
-                    if (stream?.CanRead ?? false)
-                    {
-                        stream.Seek(0, SeekOrigin.Begin);
-                        speechRecognizer.StartRecognition(stream);
-                        var result = speechRecognizer.GetResult();
-                        speechRecognizer.StopRecognition();
-                        Console.WriteLine($"STT: {result?.GetHypothesis()}");
-                    }
-                }
-            });
+            stream.Seek(0, SeekOrigin.Begin);
+            var newFormat = new WaveFormat(InputRate, 16, 1);
+            WaveFormatConversionStream cs = new WaveFormatConversionStream(newFormat, wavStream);
 
-            return null;
+            // var fn = "a-" + Guid.NewGuid() + ".wav";
+            // WaveFileWriter.CreateWaveFile(fn, cs);
+            cs.Seek(0, SeekOrigin.Begin);
+            speechRecognizer.StartRecognition(cs);
+            var result = speechRecognizer.GetResult();
+            speechRecognizer.StopRecognition();
+            Console.WriteLine($"STT: {result?.GetHypothesis()}");
 
+            return result?.GetHypothesis();
         }
 
     }

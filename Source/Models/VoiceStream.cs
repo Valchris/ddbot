@@ -19,7 +19,7 @@ namespace DDBot.Models
         public VoiceStream(ulong ChannelId)
         {
             this.ChannelId = ChannelId;
-            this.Stream = new FileStream($"a-{Guid.NewGuid()}.wav", FileMode.Create);
+            this.Stream = new MemoryStream();
             this.IsSpeaking = false;
         }
 
