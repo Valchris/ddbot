@@ -164,7 +164,8 @@ namespace DDBot.Listeners
                         {
                             if (messageSet.Count() > 0)
                             {
-                                var sentimentScores = await this.sentimentService.AnalyzeMessage(messageSet.Select(x => new SentimentMessage(x)).ToList());
+                                // Do not initialize bots
+                                var sentimentScores = await this.sentimentService.AnalyzeMessage(messageSet.Where(z => !z.Author.IsBot).Select(x => new SentimentMessage(x)).ToList());
                                 await this.sentimentHistoryService.StoreMessage(sentimentScores);
                             }
                         });
