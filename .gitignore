@@ -15,3 +15,5 @@
 /.vs/ddbot/v15/Server/sqlite3/db.lock
 /.vs/ddbot/v15/Server/sqlite3
 /.vs/ddbot/DesignTimeBuild/.dtbcache
+/.vs/slnx.sqlite
+/.vs/VSWorkspaceState.json
