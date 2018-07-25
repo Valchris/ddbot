@@ -28,7 +28,7 @@ namespace DDBot.Services
             this.client.AzureRegion = AzureRegions.Westus2;
         }
 
-        public async Task<List<SentimentScore>> AnalyzeMessage(List<IMessage> messages)
+        public async Task<List<SentimentScore>> AnalyzeMessage(List<SentimentMessage> messages)
         {
             var inputs = new List<MultiLanguageInput>();
             var i = 0;
@@ -48,11 +48,11 @@ namespace DDBot.Services
                 {
                     var latestScore = new SentimentScore()
                     {
-                        Author = messages[i].Author.Username,
-                        AuthorId = messages[i].Author.Id,
-                        ChannelId = messages[i].Channel.Id,
+                        Author = messages[i].Author,
+                        AuthorId = messages[i].AuthorId,
+                        ChannelId = messages[i].ChannelId,
                         Score = result.Documents[i].Score ?? -1,
-                        Timestamp = messages[i].Timestamp.UtcDateTime
+                        Timestamp = messages[i].Timestamp
 
                     };
                     i++;

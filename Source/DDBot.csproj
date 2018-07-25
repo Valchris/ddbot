@@ -131,6 +131,7 @@
     <Compile Include="Listeners\IDiscordListeners.cs" />
     <Compile Include="Models\AggregatedScore.cs" />
     <Compile Include="Models\HasInitialized.cs" />
+    <Compile Include="Models\SentimentMessage.cs" />
     <Compile Include="Models\SentimentScore.cs" />
     <Compile Include="Models\VoiceStream.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

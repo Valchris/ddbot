@@ -2,6 +2,7 @@
 using DDBot.Models;
 using DDBot.Services;
 using Discord;
+using Discord.Net;
 using Discord.WebSocket;
 using Newtonsoft.Json;
 using System;
@@ -128,7 +129,7 @@ namespace DDBot.Listeners
                     var blocked = this.sentimentHistoryService.CheckSpamBlock(message);
                     if(!blocked)
                     {
-                        var result = await sentimentService.AnalyzeMessage(new List<IMessage>() { message });
+                        var result = await sentimentService.AnalyzeMessage(new List<SentimentMessage>() { new SentimentMessage(message) });
                         await this.sentimentHistoryService.StoreMessage(result);
                     }
                     return;
@@ -163,7 +164,7 @@ namespace DDBot.Listeners
                         {
                             if (messageSet.Count() > 0)
                             {
-                                var sentimentScores = await this.sentimentService.AnalyzeMessage(messageSet.ToList());
+                                var sentimentScores = await this.sentimentService.AnalyzeMessage(messageSet.Select(x => new SentimentMessage(x)).ToList());
                                 await this.sentimentHistoryService.StoreMessage(sentimentScores);
                             }
                         });
@@ -206,6 +207,7 @@ namespace DDBot.Listeners
                     foreach(var cu in to.VoiceChannel.Users)
                     {
                         UserChannels[cu.Id] = new VoiceStream(to.VoiceChannel.Id);
+                        SpeakingSemaphores[cu.Id] = new SemaphoreSlim(1);
                     }
 
                     Console.WriteLine(user.GetType());
@@ -222,10 +224,12 @@ namespace DDBot.Listeners
                 if(to.VoiceChannel?.Id == null)
                 {
                     UserChannels.Remove(user.Id);
+                    SpeakingSemaphores.Remove(user.Id);
                 }
                 else
                 {
                     UserChannels[user.Id] = new VoiceStream(to.VoiceChannel.Id);
+                    SpeakingSemaphores[user.Id] = new SemaphoreSlim(1);
                 }
             }
         }
@@ -238,7 +242,38 @@ namespace DDBot.Listeners
                 // Was speaking, is now stopped
                 if(currentValue.IsSpeaking == true && isSpeaking == false)
                 {
-                    await this.voiceToTextService.ProcessVoiceToText(currentValue.Stream);
+    #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                    Task.Factory.StartNew(async () =>
+                    {
+                        try
+                        {
+                            await SpeakingSemaphores[authorId].WaitAsync();
+
+                            var speechToText = await this.voiceToTextService.ProcessVoiceToText(currentValue.Stream);
+                            if(!string.IsNullOrEmpty(speechToText))
+                            {
+                                var sentiment = await this.sentimentService.AnalyzeMessage(new List<SentimentMessage>()
+                                {
+                                    new SentimentMessage() {
+                                            Author = this.discordClient.GetUser(authorId).Username,
+                                            AuthorId = authorId,
+                                            ChannelId = this.discordClient.GetChannel(this.UserChannels[authorId].ChannelId).Id,
+                                            Timestamp = DateTime.UtcNow,
+                                            Content = speechToText
+                                    }
+                                });
+
+                                // var result = await this.sentimentHistoryService.StoreMessage(sentiment);
+
+                            }
+                            currentValue.Stream.SetLength(0);
+                        }
+                        finally
+                        {
+                            SpeakingSemaphores[authorId]?.Release();
+                        }
+                    });
+    #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                     
                 }
                 currentValue.IsSpeaking = isSpeaking;
@@ -255,19 +290,12 @@ namespace DDBot.Listeners
                 try
                 {
                     var stream = UserChannels[id].Stream;
-                    var writer = new RawSourceWaveStream(stream, new WaveFormat(64000, 2));
-                    int frameCount = 0;
+                    var writer = new RawSourceWaveStream(stream, new WaveFormat(46000, 2));
                     while (!streamCancelToken.IsCancellationRequested)
                     {
                         RTPFrame frame = await audio.ReadFrameAsync(streamCancelToken);
                         stream.Write(frame.Payload, 0, frame.Payload.Length);
-                        Console.WriteLine($"AudioFrameReceived, {frame.Payload.Length}, {frame.Sequence}");
-
-                        //if (frameCount++ % 100 == 0)
-                        //{
-                        //    stream.Flush();
-                        //    await this.voiceToTextService.ProcessVoiceToText(stream);
-                        //}
+                        // Console.WriteLine($"AudioFrameReceived, {frame.Payload.Length}, {frame.Sequence}");
                     }
                 }
                 catch (Exception e) { Console.WriteLine(e); }
@@ -278,11 +306,5 @@ namespace DDBot.Listeners
         {
             Console.WriteLine("Audio connected");
         }
-
-
-        //private Task streamCreated(ulong arg1, AudioInStream arg2)
-        //{
-        //    arg2.
-        //}
     }
 }

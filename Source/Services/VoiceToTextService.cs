@@ -31,15 +31,19 @@ namespace DDBot.Services
 
         public async Task<string> ProcessVoiceToText(Stream stream)
         {
+            var fn = "a-" + Guid.NewGuid() + ".wav";
             stream.Seek(0, SeekOrigin.Begin);
-            var wavStream = new RawSourceWaveStream(stream, new WaveFormat(64000, 2));
-            // WaveFileWriter.CreateWaveFile("fn-source.wav", wavStream);
+            var wavStream = new RawSourceWaveStream(stream, new WaveFormat(46000, 2));
+
+            // Debugging only
+            // WaveFileWriter.CreateWaveFile($"{fn}-source.wav", wavStream);
 
             stream.Seek(0, SeekOrigin.Begin);
-            var newFormat = new WaveFormat(InputRate, 16, 1);
+            // Shifting by 2k seems to slow down the speech and help recognition
+            var newFormat = new WaveFormat(InputRate - 2000, 16, 1);
             WaveFormatConversionStream cs = new WaveFormatConversionStream(newFormat, wavStream);
 
-            // var fn = "a-" + Guid.NewGuid() + ".wav";
+            // Debugging only
             // WaveFileWriter.CreateWaveFile(fn, cs);
             cs.Seek(0, SeekOrigin.Begin);
             speechRecognizer.StartRecognition(cs);
