@@ -35,8 +35,7 @@ namespace DDBot.Listeners
         private readonly SentimentSummaryService sentimentSummaryService;
         private readonly VoiceToTextService voiceToTextService;
         private readonly SemaphoreSlim InitializedSempahore;
-        private readonly Dictionary<ulong, SemaphoreSlim> SpeakingSemaphores;
-        private readonly Dictionary<ulong, VoiceStream> UserChannels;
+        private readonly Dictionary<ulong, SocketVoiceChannel> audioChannels;
 
         public DiscordListeners(Config config, DiscordSocketClient discordClient, SentimentService sentimentService, SentimentHistoryService sentimentHistoryService, SentimentSummaryService sentimentSummaryService, VoiceToTextService voiceToTextService)
         {
@@ -46,9 +45,7 @@ namespace DDBot.Listeners
             this.sentimentHistoryService = sentimentHistoryService;
             this.sentimentSummaryService = sentimentSummaryService;
             this.voiceToTextService = voiceToTextService;
-            this.InitializedSempahore = new SemaphoreSlim(1);
-            this.SpeakingSemaphores = new Dictionary<ulong, SemaphoreSlim>();
-            this.UserChannels = new Dictionary<ulong, VoiceStream>();
+            this.audioChannels = new Dictionary<ulong, SocketVoiceChannel>();
         }
 
         public Task Log(LogMessage msg)
@@ -198,109 +195,187 @@ namespace DDBot.Listeners
 
         public async Task UserVoiceStateUpdated(SocketUser user, SocketVoiceState from, SocketVoiceState to)
         {
-            if(user.Id == discordClient.CurrentUser.Id)
+            if (user.Id == discordClient.CurrentUser.Id)
             {
                 var guildUser = user as SocketGuildUser;
-                if(to.VoiceChannel != null && guildUser != null)
+                if (to.VoiceChannel != null && guildUser != null)
                 {
-
-                    // On join, populate all the existing users
-                    foreach(var cu in to.VoiceChannel.Users)
-                    {
-                        UserChannels[cu.Id] = new VoiceStream(to.VoiceChannel.Id);
-                        SpeakingSemaphores[cu.Id] = new SemaphoreSlim(1);
-                    }
+                    audioChannels[guildUser.Id] = to.VoiceChannel;
 
                     Console.WriteLine(user.GetType());
                     Console.WriteLine(to.GetType());
+                    Console.WriteLine($"To ID: {to.VoiceSessionId}");
                     guildUser.Guild.AudioClient.Connected += AudioConnected;
                     guildUser.Guild.AudioClient.StreamCreated += StreamCreated;
+
                     guildUser.Guild.AudioClient.SpeakingUpdated += SpeakingUpdated;
                 }
                 Console.WriteLine($"Bot voice state change: {user.Username}, to: {from}, from: {to}");
             }
-            else
-            {
-                // Once joined, track changes as they come
-                if(to.VoiceChannel?.Id == null)
-                {
-                    UserChannels.Remove(user.Id);
-                    SpeakingSemaphores.Remove(user.Id);
-                }
-                else
-                {
-                    UserChannels[user.Id] = new VoiceStream(to.VoiceChannel.Id);
-                    SpeakingSemaphores[user.Id] = new SemaphoreSlim(1);
-                }
-            }
+            //else
+            //{
+            //    // Once joined, track changes as they come
+            //    if(to.VoiceChannel?.Id == null)
+            //    {
+            //        UserChannels.Remove(user.Id);
+            //        SpeakingSemaphores.Remove(user.Id);
+            //    }
+            //    else
+            //    {
+            //        UserChannels[user.Id] = new VoiceStream(to.VoiceChannel.Id);
+            //        SpeakingSemaphores[user.Id] = new SemaphoreSlim(1);
+            //    }
+            //}
         }
 
-        private async Task SpeakingUpdated(ulong authorId, bool isSpeaking)
+        private async Task SpeakingUpdated(ulong userId, bool isSpeaking)
         {
-            VoiceStream currentValue;
-            if(UserChannels.TryGetValue(authorId, out currentValue))
+    //        VoiceStream currentValue;
+    //        if(UserChannels.TryGetValue(authorId, out currentValue))
+    //        {
+    //            // Was speaking, is now stopped
+    //            if(currentValue.IsSpeaking == true && isSpeaking == false)
+    //            {
+    //#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+    //                Task.Factory.StartNew(async () =>
+    //                {
+    //                    try
+    //                    {
+    //                        await SpeakingSemaphores[authorId].WaitAsync();
+
+    //                        var speechToText = await this.voiceToTextService.ProcessVoiceToText(currentValue.Stream);
+    //                        if(!string.IsNullOrEmpty(speechToText))
+    //                        {
+    //                            var sentiment = await this.sentimentService.AnalyzeMessage(new List<SentimentMessage>()
+    //                            {
+    //                                new SentimentMessage() {
+    //                                        Author = this.discordClient.GetUser(authorId).Username,
+    //                                        AuthorId = authorId,
+    //                                        ChannelId = this.discordClient.GetChannel(this.UserChannels[authorId].ChannelId).Id,
+    //                                        Timestamp = DateTime.UtcNow,
+    //                                        Content = speechToText
+    //                                }
+    //                            });
+
+    //                            // var result = await this.sentimentHistoryService.StoreMessage(sentiment);
+
+    //                        }
+    //                        currentValue.Stream.SetLength(0);
+    //                    }
+    //                    finally
+    //                    {
+    //                        SpeakingSemaphores[authorId]?.Release();
+    //                    }
+    //                });
+    //#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                    
+    //            }
+    //            currentValue.IsSpeaking = isSpeaking;
+    //        }
+    //        Console.WriteLine($"Speaking Updated for {authorId}, VoiceMemoryStream: {UserChannels[authorId]}, isSpeaking: {isSpeaking}");
+        }
+
+        private async Task StreamCreated(ulong userId, AudioInStream audio)
+        {
+            var streamCancelToken = new CancellationToken();
+            var stream = new MemoryStream();
+
+            var user = this.discordClient.GetUser(userId);
+
+            var channels = this.discordClient.Guilds.SelectMany(g => g.Channels);
+            var voiceChannels = channels.Where(x => x.Users.Where(z => z.Id == userId).Any()).Select(z => z as SocketVoiceChannel).Where(y => y != null);
+            var semaphore = new SemaphoreSlim(1);
+
+            if (voiceChannels.Count() == 1)
             {
-                // Was speaking, is now stopped
-                if(currentValue.IsSpeaking == true && isSpeaking == false)
+                var channel = voiceChannels.First();
+
+#pragma warning disable CS4014
+                Task.Factory.StartNew(async () =>
+#pragma warning restore CS4014
                 {
-    #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                    Task.Factory.StartNew(async () =>
+                    do
                     {
                         try
                         {
-                            await SpeakingSemaphores[authorId].WaitAsync();
+                            // Wait a while as the stream is coming in
+                            await Task.Delay(10000);
 
-                            var speechToText = await this.voiceToTextService.ProcessVoiceToText(currentValue.Stream);
-                            if(!string.IsNullOrEmpty(speechToText))
+                            // Wait on the semaphore synchronization
+                            await semaphore.WaitAsync();
+
+                            if (stream.Length > 0)
                             {
-                                var sentiment = await this.sentimentService.AnalyzeMessage(new List<SentimentMessage>()
-                                {
-                                    new SentimentMessage() {
-                                            Author = this.discordClient.GetUser(authorId).Username,
-                                            AuthorId = authorId,
-                                            ChannelId = this.discordClient.GetChannel(this.UserChannels[authorId].ChannelId).Id,
-                                            Timestamp = DateTime.UtcNow,
-                                            Content = speechToText
-                                    }
-                                });
+                                Console.WriteLine("Sent for processing");
+                                var rate = 46000;
+                                var text = await this.voiceToTextService.ProcessVoiceToText(stream, rate);
+                                Console.WriteLine($"STT {user.Username}: {text}");
 
-                                // var result = await this.sentimentHistoryService.StoreMessage(sentiment);
+                                // Reset the stream
+                                stream.SetLength(0);
 
                             }
-                            currentValue.Stream.SetLength(0);
                         }
                         finally
                         {
-                            SpeakingSemaphores[authorId]?.Release();
+                            semaphore.Release();
                         }
-                    });
-    #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                    
-                }
-                currentValue.IsSpeaking = isSpeaking;
-            }
-            Console.WriteLine($"Speaking Updated for {authorId}, VoiceMemoryStream: {UserChannels[authorId]}, isSpeaking: {isSpeaking}");
-        }
+                    } while (audio.CanRead);
 
-        private async Task StreamCreated(ulong id, AudioInStream audio)
-        {
-            Console.WriteLine($"Stream created: {id}, {audio}");
-            var streamCancelToken = new CancellationToken();
-            await Task.Factory.StartNew(async () =>
-            {
-                try
+                });
+
+#pragma warning disable CS4014
+                Task.Factory.StartNew(async () =>
+#pragma warning restore CS4014
                 {
-                    var stream = UserChannels[id].Stream;
-                    var writer = new RawSourceWaveStream(stream, new WaveFormat(46000, 2));
-                    while (!streamCancelToken.IsCancellationRequested)
+                    do
                     {
-                        RTPFrame frame = await audio.ReadFrameAsync(streamCancelToken);
-                        stream.Write(frame.Payload, 0, frame.Payload.Length);
-                        // Console.WriteLine($"AudioFrameReceived, {frame.Payload.Length}, {frame.Sequence}");
-                    }
-                }
-                catch (Exception e) { Console.WriteLine(e); }
-            }, streamCancelToken);
+                        try
+                        {
+                            // Wait for a frame to show up on the audio channel
+                            RTPFrame frame = await audio.ReadFrameAsync(streamCancelToken);
+                            Console.WriteLine("Frame received");
+                            try
+                            {
+                                // Wait on the semaphore synchronization
+                                await semaphore.WaitAsync();
+
+                                // Write the payload to the memory stream
+                                stream.Write(frame.Payload, 0, frame.Payload.Length);
+                            }
+                            finally
+                            {
+                                semaphore.Release();
+                            }
+                        }
+                        catch (Exception e) { Console.WriteLine(e); }
+
+                    } while (audio.CanRead);
+                });
+            }
+            else
+            {
+                Console.WriteLine("Audio Channel not found, can't initialize sentiment analysis on voice stream.");
+            }
+
+
+            //Console.WriteLine($"Stream created: {id}, {audio}");
+            //var streamCancelToken = new CancellationToken();
+            //await Task.Factory.StartNew(async () =>
+            //{
+            //    try
+            //    {
+            //        var stream = UserChannels[id].Stream;
+            //        var writer = new RawSourceWaveStream(stream, new WaveFormat(46000, 2));
+            //        while (!streamCancelToken.IsCancellationRequested)
+            //        {
+            //            RTPFrame frame = await audio.ReadFrameAsync(streamCancelToken);
+            //            stream.Write(frame.Payload, 0, frame.Payload.Length);
+            //            // Console.WriteLine($"AudioFrameReceived, {frame.Payload.Length}, {frame.Sequence}");
+            //        }
+            //    }
+            //    catch (Exception e) { Console.WriteLine(e); }
+            //}, streamCancelToken);
         }
 
         private async Task AudioConnected()

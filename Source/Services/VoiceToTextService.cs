@@ -12,9 +12,9 @@ namespace DDBot.Services
 {
     public class VoiceToTextService
     {
-        private readonly Syn.Speech.Api.Configuration config;
-        private readonly StreamSpeechRecognizer speechRecognizer;
-        private const int InputRate = 16000;
+        private Syn.Speech.Api.Configuration config;
+        private StreamSpeechRecognizer speechRecognizer;
+        private const int InputRate = 46000;
 
         public VoiceToTextService()
         {
@@ -29,28 +29,25 @@ namespace DDBot.Services
             this.speechRecognizer = new StreamSpeechRecognizer(config);
         }
 
-        public async Task<string> ProcessVoiceToText(Stream stream)
+        public async Task<string> ProcessVoiceToText(Stream stream, int bitRate)
         {
-            var fn = "a-" + Guid.NewGuid() + ".wav";
+            var fn = $"a-{Guid.NewGuid()}-{bitRate}.wav";
             stream.Seek(0, SeekOrigin.Begin);
-            var wavStream = new RawSourceWaveStream(stream, new WaveFormat(46000, 2));
+            var wavStream = new RawSourceWaveStream(stream, new WaveFormat(bitRate, 2));
 
             // Debugging only
-            // WaveFileWriter.CreateWaveFile($"{fn}-source.wav", wavStream);
+            WaveFileWriter.CreateWaveFile($"{fn}-source.wav", wavStream);
 
             stream.Seek(0, SeekOrigin.Begin);
-            // Shifting by 2k seems to slow down the speech and help recognition
-            var newFormat = new WaveFormat(InputRate - 2000, 16, 1);
+            var newFormat = new WaveFormat(InputRate, 1);
             WaveFormatConversionStream cs = new WaveFormatConversionStream(newFormat, wavStream);
 
             // Debugging only
-            // WaveFileWriter.CreateWaveFile(fn, cs);
+            WaveFileWriter.CreateWaveFile(fn, cs);
             cs.Seek(0, SeekOrigin.Begin);
             speechRecognizer.StartRecognition(cs);
             var result = speechRecognizer.GetResult();
             speechRecognizer.StopRecognition();
-            Console.WriteLine($"STT: {result?.GetHypothesis()}");
-
             return result?.GetHypothesis();
         }
 
