@@ -133,7 +133,6 @@
     <Compile Include="Models\HasInitialized.cs" />
     <Compile Include="Models\SentimentMessage.cs" />
     <Compile Include="Models\SentimentScore.cs" />
-    <Compile Include="Models\VoiceStream.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\SentimentHistoryService.cs" />
     <Compile Include="Services\SentimentService.cs" />

@@ -36,14 +36,14 @@ namespace DDBot.Services
             var wavStream = new RawSourceWaveStream(stream, new WaveFormat(bitRate, 2));
 
             // Debugging only
-            WaveFileWriter.CreateWaveFile($"{fn}-source.wav", wavStream);
+            // WaveFileWriter.CreateWaveFile($"{fn}-source.wav", wavStream);
 
             stream.Seek(0, SeekOrigin.Begin);
             var newFormat = new WaveFormat(InputRate, 1);
             WaveFormatConversionStream cs = new WaveFormatConversionStream(newFormat, wavStream);
 
             // Debugging only
-            WaveFileWriter.CreateWaveFile(fn, cs);
+            // WaveFileWriter.CreateWaveFile(fn, cs);
             cs.Seek(0, SeekOrigin.Begin);
             speechRecognizer.StartRecognition(cs);
             var result = speechRecognizer.GetResult();

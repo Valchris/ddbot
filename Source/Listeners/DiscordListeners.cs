@@ -313,7 +313,6 @@ namespace DDBot.Listeners
 
                                 // Reset the stream
                                 stream.SetLength(0);
-
                             }
                         }
                         finally
