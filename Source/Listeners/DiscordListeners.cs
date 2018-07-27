@@ -282,7 +282,7 @@ namespace DDBot.Listeners
                         await semaphore.WaitAsync();
 
                         if (stream.Length > 0)
-                            {
+                        {
                             Console.WriteLine("Sent for processing");
                             var rate = 46000;
                             var text = await this.voiceToTextService.ProcessVoiceToText(stream, rate);
@@ -290,13 +290,13 @@ namespace DDBot.Listeners
 
                             // Reset the stream
                             stream.SetLength(0);
-                            }
                         }
-                        finally
-                        {
-                        semaphore.Release();
-                        }
-                    });
+                    }
+                    finally
+                    {
+                    semaphore.Release();
+                    }
+                });
             }
         }
                     
