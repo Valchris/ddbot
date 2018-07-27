@@ -14,7 +14,7 @@ namespace DDBot.Services
     {
         private Syn.Speech.Api.Configuration config;
         private StreamSpeechRecognizer speechRecognizer;
-        private const int InputRate = 46000;
+        private const int InputRate = 16000;
 
         public VoiceToTextService()
         {
@@ -43,7 +43,7 @@ namespace DDBot.Services
             WaveFormatConversionStream cs = new WaveFormatConversionStream(newFormat, wavStream);
 
             // Debugging only
-            WaveFileWriter.CreateWaveFile(fn, cs);
+            // WaveFileWriter.CreateWaveFile(fn, cs);
             cs.Seek(0, SeekOrigin.Begin);
             speechRecognizer.StartRecognition(cs);
             var result = speechRecognizer.GetResult();
