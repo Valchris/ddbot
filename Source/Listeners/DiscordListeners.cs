@@ -283,10 +283,15 @@ namespace DDBot.Listeners
 
                         if (stream.Length > 0)
                         {
-                            Console.WriteLine("Sent for processing");
+                            // Console.WriteLine("Sent for processing");
                             var rate = 46000;
                             var text = await this.voiceToTextService.ProcessVoiceToText(stream, rate);
                             Console.WriteLine($"STT {user.Username}: {text}");
+
+                            if(text.Length > 2)
+                            {
+                                await user.SendMessageAsync("VTT:" + text);
+                            }
 
                             // Reset the stream
                             stream.SetLength(0);
@@ -339,7 +344,7 @@ namespace DDBot.Listeners
 
                                 // Write the payload to the memory stream
                                 stream.Write(frame.Payload, 0, frame.Payload.Length);
-                                Console.WriteLine($"Frame received for user {user.Username} - {stream.Length}");
+                                // Console.WriteLine($"Frame received for user {user.Username} - {stream.Length}");
                             }
                             finally
                             {
