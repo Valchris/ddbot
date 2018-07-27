@@ -100,14 +100,14 @@ namespace DDBot.Listeners
                     var userDailyLevel = userDailySummary.GroupBy(x => x.Key.Split('-')[0]);
 
                     List<DataPoint> list = new List<DataPoint>();
-
+                    List<Tuple<string, double>> users = new List<Tuple<string, double>>();
                     int userCount = 1;
 
                     foreach (var userData in userDailyLevel)
                     {
                         int messageCount = 0;
                         double scoreAgg = 0;
-                        double dailyScore = 0;
+                        double totalScore = 0;
 
                         foreach (var messageData in userData)
                         {
@@ -115,22 +115,24 @@ namespace DDBot.Listeners
                             messageCount += messageData.Value.Count;
                         }
 
-                        dailyScore = (scoreAgg / messageCount) * 100;
-
-                        var item = new DataPoint(userCount, dailyScore)
-                        {
-                            AxisLabel = userData.Key
-                        };
-
-                        list.Add(item);
+                        totalScore = (scoreAgg / messageCount) * 100;
+                        users.Add(Tuple.Create(userData.Key, totalScore));
                         userCount++;
                     }
 
-                    List<DataPoint> SortedList = list.OrderBy(o => o.YValues[0]).ToList();
+                    users.Sort((x, y) => y.Item2.CompareTo(x.Item2));
 
-                    chartService.GeneratePlot(SortedList);
+                    for(var i = 1; i <= users.Count(); i++)
+                    {
+                        var item = new DataPoint(i, users[i - 1].Item2)
+                        {
+                            AxisLabel = users[i - 1].Item1
+                        };
+                        list.Add(item);
+                    }
 
-                    await message.Channel.SendFileAsync("a_mypic.png", $"Channel-wide \"Sentiment\" scores... {SortedList[0].AxisLabel} could use a hug.");
+                    chartService.GeneratePlot(list);
+                    await message.Channel.SendFileAsync("a_mypic.png", $"Channel-wide \"Sentiment\" scores... {list[Math.Max(list.Count() - 1, 0)].AxisLabel} could use a hug.");
                     break;
                 case "!memory":
                     await message.Channel.SendMessageAsync($"There are {sentimentHistoryService.GetMessages(message.Channel.Id)?.Count ?? 0} messages(s) stored for this channel.");
