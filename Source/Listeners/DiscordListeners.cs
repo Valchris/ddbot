@@ -223,7 +223,6 @@ namespace DDBot.Listeners
         private async Task SpeakingUpdated(ulong userId, bool isSpeaking)
         {
             SemaphoreSlim semaphore;
-            Stream stream;
             var user = this.discordClient.GetUser(userId);
 
             if (!semaphores.TryGetValue(userId, out semaphore))
@@ -232,20 +231,30 @@ namespace DDBot.Listeners
                 semaphore = semaphores[userId];
             }
 
-            if(!streams.TryGetValue(userId, out stream))
-            {
-                streams[userId] = new MemoryStream();
-                stream = streams[userId];
-            }
-
             if(!isSpeaking)
             {
 #pragma warning disable CS4014
                 Task.Factory.StartNew(async () =>
 #pragma warning restore CS4014
                 {
+                    Stream stream;
+
+                    if (!streams.TryGetValue(userId, out stream))
+                    {
+                        streams[userId] = new MemoryStream();
+                        stream = streams[userId];
+                    }
+
                     try
                     {
+                        // Wait for the other thread to parse the whole set of frames
+                        while(stream.Length != stream.Position)
+                        {
+                            await semaphore.WaitAsync();
+                            Console.WriteLine($"Length:{stream.Length}, Position: {stream.Position}");
+                            await Task.Delay(1000);
+                        }
+
                         // Wait on the semaphore synchronization
                         await semaphore.WaitAsync();
 
@@ -270,22 +279,6 @@ namespace DDBot.Listeners
 
         private async Task StreamCreated(ulong userId, AudioInStream audio)
         {
-            SemaphoreSlim semaphore;
-            Stream stream;
-            var user = this.discordClient.GetUser(userId);
-
-            if (!semaphores.TryGetValue(userId, out semaphore))
-            {
-                semaphores[userId] = new SemaphoreSlim(1);
-                semaphore = semaphores[userId];
-            }
-
-            if (!streams.TryGetValue(userId, out stream))
-            {
-                streams[userId] = new MemoryStream();
-                stream = streams[userId];
-            }
-
             //var channels = this.discordClient.Guilds.SelectMany(g => g.Channels);
             //var voiceChannels = channels.Where(x => x.Users.Where(z => z.Id == userId).Any()).Select(z => z as SocketVoiceChannel).Where(y => y != null);
 
@@ -293,24 +286,46 @@ namespace DDBot.Listeners
             Task.Factory.StartNew(async () =>
 #pragma warning restore CS4014
             {
+                SemaphoreSlim semaphore;
+                Stream stream;
+
+                if (!semaphores.TryGetValue(userId, out semaphore))
+                {
+                    semaphores[userId] = new SemaphoreSlim(1);
+                    semaphore = semaphores[userId];
+                }
+
+                var user = this.discordClient.GetUser(userId);
                 do
                 {
                     try
                     {
                         // Wait for a frame to show up on the audio channel
-                        RTPFrame frame = await audio.ReadFrameAsync(new CancellationToken());
-                        // Console.WriteLine("Frame received");
-                        try
+                        if(audio.AvailableFrames > 0)
                         {
-                            // Wait on the semaphore synchronization
-                            await semaphore.WaitAsync();
+                            try
+                            {
+                                await semaphore.WaitAsync();
+                                RTPFrame frame = await audio.ReadFrameAsync(new CancellationToken());
+                                // Wait on the semaphore synchronization
+                                if (!streams.TryGetValue(userId, out stream))
+                                {
+                                    streams[userId] = new MemoryStream();
+                                    stream = streams[userId];
+                                }
 
-                            // Write the payload to the memory stream
-                            stream.Write(frame.Payload, 0, frame.Payload.Length);
+                                // Write the payload to the memory stream
+                                stream.Write(frame.Payload, 0, frame.Payload.Length);
+                                Console.WriteLine($"Frame received for user {user.Username} - {stream.Length}");
+                            }
+                            finally
+                            {
+                                semaphore.Release();
+                            }
                         }
-                        finally
+                        else
                         {
-                            semaphore.Release();
+                            await Task.Delay(500);
                         }
                     }
                     catch (Exception e) { Console.WriteLine(e); }

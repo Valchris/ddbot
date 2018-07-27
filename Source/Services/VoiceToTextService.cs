@@ -14,7 +14,7 @@ namespace DDBot.Services
     {
         private Syn.Speech.Api.Configuration config;
         private StreamSpeechRecognizer speechRecognizer;
-        private const int InputRate = 46000;
+        private const int InputRate = 16000;
 
         public VoiceToTextService()
         {
