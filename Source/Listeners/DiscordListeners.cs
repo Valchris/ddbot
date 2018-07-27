@@ -96,43 +96,48 @@ namespace DDBot.Listeners
                     }
                     break;
                 case "!analysis":
-                    var userDailySummary = this.sentimentSummaryService.GenerateChannelAnalysis(message.Channel.Id);
-                    var userDailyLevel = userDailySummary.GroupBy(x => x.Key.Split('-')[0]);
-
-                    List<DataPoint> list = new List<DataPoint>();
-                    List<Tuple<string, double>> users = new List<Tuple<string, double>>();
-                    int userCount = 1;
-
-                    foreach (var userData in userDailyLevel)
+#pragma warning disable CS4014
+                    Task.Factory.StartNew(async () =>
+#pragma warning restore CS4014
                     {
-                        int messageCount = 0;
-                        double scoreAgg = 0;
-                        double totalScore = 0;
+                        var userDailySummary = this.sentimentSummaryService.GenerateChannelAnalysis(message.Channel.Id);
+                        var userDailyLevel = userDailySummary.GroupBy(x => x.Key.Split('-')[0]);
 
-                        foreach (var messageData in userData)
+                        List<DataPoint> list = new List<DataPoint>();
+                        List<Tuple<string, double>> users = new List<Tuple<string, double>>();
+                        int userCount = 1;
+
+                        foreach (var userData in userDailyLevel)
                         {
-                            scoreAgg += messageData.Value.Score;
-                            messageCount += messageData.Value.Count;
+                            int messageCount = 0;
+                            double scoreAgg = 0;
+                            double totalScore = 0;
+
+                            foreach (var messageData in userData)
+                            {
+                                scoreAgg += messageData.Value.Score;
+                                messageCount += messageData.Value.Count;
+                            }
+
+                            totalScore = (scoreAgg / messageCount) * 100;
+                            users.Add(Tuple.Create(userData.Key, totalScore));
+                            userCount++;
                         }
 
-                        totalScore = (scoreAgg / messageCount) * 100;
-                        users.Add(Tuple.Create(userData.Key, totalScore));
-                        userCount++;
-                    }
+                        users.Sort((x, y) => y.Item2.CompareTo(x.Item2));
 
-                    users.Sort((x, y) => y.Item2.CompareTo(x.Item2));
-
-                    for(var i = 1; i <= users.Count(); i++)
-                    {
-                        var item = new DataPoint(i, users[i - 1].Item2)
+                        for (var i = 1; i <= users.Count(); i++)
                         {
-                            AxisLabel = users[i - 1].Item1
-                        };
-                        list.Add(item);
-                    }
+                            var item = new DataPoint(i, users[i - 1].Item2)
+                            {
+                                AxisLabel = users[i - 1].Item1
+                            };
+                            list.Add(item);
+                        }
 
-                    chartService.GeneratePlot(list);
-                    await message.Channel.SendFileAsync("a_mypic.png", $"Channel-wide \"Sentiment\" scores... {list[Math.Max(list.Count() - 1, 0)].AxisLabel} could use a hug.");
+                        chartService.GeneratePlot(list);
+                        await message.Channel.SendFileAsync("a_mypic.png", $"Channel-wide \"Sentiment\" scores... {list[Math.Max(list.Count() - 1, 0)].AxisLabel} could use a hug.");
+                    });
                     break;
                 case "!memory":
                     await message.Channel.SendMessageAsync($"There are {sentimentHistoryService.GetMessages(message.Channel.Id)?.Count ?? 0} messages(s) stored for this channel.");
