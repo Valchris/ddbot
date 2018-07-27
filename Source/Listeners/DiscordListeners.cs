@@ -234,7 +234,6 @@ namespace DDBot.Listeners
                     Console.WriteLine(user.GetType());
                     Console.WriteLine(to.GetType());
                     Console.WriteLine($"To ID: {to.VoiceSessionId}");
-                    guildUser.Guild.AudioClient.Connected += AudioConnected;
                     guildUser.Guild.AudioClient.StreamCreated += StreamCreated;
 
                     guildUser.Guild.AudioClient.SpeakingUpdated += SpeakingUpdated;
@@ -321,9 +320,9 @@ namespace DDBot.Listeners
 
                 var user = this.discordClient.GetUser(userId);
                 do
-            {
-                try
                 {
+                    try
+                    {
                         // Wait for a frame to show up on the audio channel
                         if(audio.AvailableFrames > 0)
                         {
@@ -352,8 +351,7 @@ namespace DDBot.Listeners
                             await Task.Delay(500);
                         }
                     }
-                }
-                catch (Exception e) { Console.WriteLine(e); }
+                    catch (Exception e) { Console.WriteLine(e); }
 
                 } while (audio.CanRead);
             });
