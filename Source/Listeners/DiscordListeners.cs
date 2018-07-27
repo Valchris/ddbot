@@ -93,32 +93,9 @@ namespace DDBot.Listeners
                     }
                     break;
                 case "!analysis":
-                    var userDaySummary = this.sentimentSummaryService.GenerateChannelAnalysis(message.Channel.Id);
-                    var userLevel = userDaySummary.GroupBy(x => x.Key.Split('-')[0]);
-                    Dictionary<string, double> users = new Dictionary<string, double>();
-
-                    foreach(var userData in userLevel)
-                    {
-                        double acc = 0;
-                        int count = 0;
-                        foreach(var d in userData)
-                        {
-                            acc += d.Value.Score;
-                            count += d.Value.Count;
-                        }
-
-                        users[userData.Key] = acc / count;
-                    }
-
-                    var analysisOutputSet = users.OrderBy(y => y.Value).Select(x => $"{x.Key}: {(x.Value * 100).ToString("0.00")}%");
-
-                    await message.Channel.SendMessageAsync($"**User Scores**\n```fix\n{string.Join("\n", analysisOutputSet)}```");
-                    break;
-                //for Danielle's testing only... :)
-                case "!dtest":
-
                     var userDailySummary = this.sentimentSummaryService.GenerateChannelAnalysis(message.Channel.Id);
                     var userDailyLevel = userDailySummary.GroupBy(x => x.Key.Split('-')[0]);
+
                     List<DataPoint> list = new List<DataPoint>();
 
                     int userCount = 1;
@@ -135,11 +112,11 @@ namespace DDBot.Listeners
                             messageCount += messageData.Value.Count;
                         }
 
-                        dailyScore = (scoreAgg / messageCount)*100;
+                        dailyScore = (scoreAgg / messageCount) * 100;
 
                         var item = new DataPoint(userCount, dailyScore)
                         {
-                            AxisLabel = userData.Key                            
+                            AxisLabel = userData.Key
                         };
 
                         list.Add(item);
@@ -150,27 +127,7 @@ namespace DDBot.Listeners
 
                     chartService.GeneratePlot(SortedList);
 
-                    //List<DataPoint> list = new List<DataPoint>();
-
-                    //var item1 = new DataPoint(1, 24.1);
-                    //var item2 = new DataPoint(2, 96.3);
-                    //var item3 = new DataPoint(3, 70.7);
-                    //var item4 = new DataPoint(4, 40.4);
-
-                    //item1.AxisLabel = "User 1";
-                    //item2.AxisLabel = "User 2";
-                    //item3.AxisLabel = "User 3";
-                    //item4.AxisLabel = "User 4";
-
-                    //list.Add(item1);
-                    //list.Add(item2);
-                    //list.Add(item3);
-                    //list.Add(item4);
-
-                    //chartService.GeneratePlot(list);
-
-                    //await message.Channel.SendMessageAsync($"Items: {item1}, {item2}, {item3}, {item4} ...testing of chart method call complete.");
-                    await message.Channel.SendMessageAsync("...testing of chart method call complete.");
+                    await message.Channel.SendFileAsync("a_mypic.png", $"Channel-wide \"Sentiment\" scores... {SortedList[0].AxisLabel} could use a hug.");
                     break;
                 case "!memory":
                     await message.Channel.SendMessageAsync($"There are {sentimentHistoryService.GetMessages(message.Channel.Id)?.Count ?? 0} messages(s) stored for this channel.");
