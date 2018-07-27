@@ -13,6 +13,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Discord.Audio;
+using System.Windows.Forms.DataVisualization.Charting;
 using NAudio.Wave;
 
 namespace DDBot.Listeners
@@ -33,19 +34,24 @@ namespace DDBot.Listeners
         private readonly SentimentService sentimentService;
         private readonly SentimentHistoryService sentimentHistoryService;
         private readonly SentimentSummaryService sentimentSummaryService;
+        private readonly ChartService chartService;
+        private readonly SemaphoreSlim semaphore;
         private readonly VoiceToTextService voiceToTextService;
         private readonly Dictionary<ulong, SocketVoiceChannel> audioChannels;
         private readonly Dictionary<ulong, SemaphoreSlim> semaphores;
         private readonly Dictionary<ulong, Stream> streams;
         private readonly SemaphoreSlim initializedSemaphore;
-        
-        public DiscordListeners(Config config, DiscordSocketClient discordClient, SentimentService sentimentService, SentimentHistoryService sentimentHistoryService, SentimentSummaryService sentimentSummaryService, VoiceToTextService voiceToTextService)
+
+        public DiscordListeners(Config config, DiscordSocketClient discordClient, SentimentService sentimentService, SentimentHistoryService sentimentHistoryService, SentimentSummaryService sentimentSummaryService, VoiceToTextService voiceToTextService, ChartService chartService)
         {
             this.config = config;
             this.discordClient = discordClient;
             this.sentimentService = sentimentService;
             this.sentimentHistoryService = sentimentHistoryService;
             this.sentimentSummaryService = sentimentSummaryService;
+            this.chartService = chartService;
+            this.semaphore = new SemaphoreSlim(1);
+
             this.voiceToTextService = voiceToTextService;
             this.audioChannels = new Dictionary<ulong, SocketVoiceChannel>();
             this.semaphores = new Dictionary<ulong, SemaphoreSlim>();
@@ -66,7 +72,7 @@ namespace DDBot.Listeners
             {
                 return;
             }
-            switch(message.Content)
+            switch (message.Content)
             {
                 case "!help":
                     await message.Channel.SendMessageAsync(HelpText);
@@ -76,11 +82,11 @@ namespace DDBot.Listeners
                     break;
                 case "!sentiment":
                     var userSentiment = this.sentimentSummaryService.CalculateAverageUserSentiment(message.Channel.Id, message.Author.Id);
-                    if(userSentiment >= 0.5)
+                    if (userSentiment >= 0.5)
                     {
                         await message.Channel.SendMessageAsync($"{message.Author.Username}, your current sentiment score is {userSentiment.ToString("0.00")}. Good job, budday!");
                     }
-                    else if(userSentiment >= 0)
+                    else if (userSentiment >= 0)
                     {
                         await message.Channel.SendMessageAsync($"{message.Author.Username}, your sentiment score is {userSentiment.ToString("0.00")} - better work on that.");
                     }
@@ -90,26 +96,43 @@ namespace DDBot.Listeners
                     }
                     break;
                 case "!analysis":
-                    var userDaySummary = this.sentimentSummaryService.GenerateChannelAnalysis(message.Channel.Id);
-                    var userLevel = userDaySummary.GroupBy(x => x.Key.Split('-')[0]);
-                    Dictionary<string, double> users = new Dictionary<string, double>();
+                    var userDailySummary = this.sentimentSummaryService.GenerateChannelAnalysis(message.Channel.Id);
+                    var userDailyLevel = userDailySummary.GroupBy(x => x.Key.Split('-')[0]);
 
-                    foreach(var userData in userLevel)
+                    List<DataPoint> list = new List<DataPoint>();
+                    List<Tuple<string, double>> users = new List<Tuple<string, double>>();
+                    int userCount = 1;
+
+                    foreach (var userData in userDailyLevel)
                     {
-                        double acc = 0;
-                        int count = 0;
-                        foreach(var d in userData)
+                        int messageCount = 0;
+                        double scoreAgg = 0;
+                        double totalScore = 0;
+
+                        foreach (var messageData in userData)
                         {
-                            acc += d.Value.Score;
-                            count += d.Value.Count;
+                            scoreAgg += messageData.Value.Score;
+                            messageCount += messageData.Value.Count;
                         }
 
-                        users[userData.Key] = acc / count;
+                        totalScore = (scoreAgg / messageCount) * 100;
+                        users.Add(Tuple.Create(userData.Key, totalScore));
+                        userCount++;
                     }
 
-                    var analysisOutputSet = users.OrderBy(y => y.Value).Select(x => $"{x.Key}: {(x.Value * 100).ToString("0.00")}%");
+                    users.Sort((x, y) => y.Item2.CompareTo(x.Item2));
 
-                    await message.Channel.SendMessageAsync($"**User Scores**\n```fix\n{string.Join("\n", analysisOutputSet)}```");
+                    for(var i = 1; i <= users.Count(); i++)
+                    {
+                        var item = new DataPoint(i, users[i - 1].Item2)
+                        {
+                            AxisLabel = users[i - 1].Item1
+                        };
+                        list.Add(item);
+                    }
+
+                    chartService.GeneratePlot(list);
+                    await message.Channel.SendFileAsync("a_mypic.png", $"Channel-wide \"Sentiment\" scores... {list[Math.Max(list.Count() - 1, 0)].AxisLabel} could use a hug.");
                     break;
                 case "!memory":
                     await message.Channel.SendMessageAsync($"There are {sentimentHistoryService.GetMessages(message.Channel.Id)?.Count ?? 0} messages(s) stored for this channel.");
@@ -130,7 +153,7 @@ namespace DDBot.Listeners
                     break;
                 default:
                     var blocked = this.sentimentHistoryService.CheckSpamBlock(message);
-                    if(!blocked)
+                    if (!blocked)
                     {
                         var result = await sentimentService.AnalyzeMessage(new List<SentimentMessage>() { new SentimentMessage(message) });
                         await this.sentimentHistoryService.StoreMessage(result);
@@ -221,20 +244,21 @@ namespace DDBot.Listeners
         }
 
         private async Task SpeakingUpdated(ulong userId, bool isSpeaking)
-        {
+            {
             SemaphoreSlim semaphore;
             var user = this.discordClient.GetUser(userId);
 
             if (!semaphores.TryGetValue(userId, out semaphore))
-            {
+                {
                 semaphores[userId] = new SemaphoreSlim(1);
                 semaphore = semaphores[userId];
-            }
+                }
+
 
             if(!isSpeaking)
-            {
+                {
 #pragma warning disable CS4014
-                Task.Factory.StartNew(async () =>
+                    Task.Factory.StartNew(async () =>
 #pragma warning restore CS4014
                 {
                     Stream stream;
@@ -259,7 +283,7 @@ namespace DDBot.Listeners
                         await semaphore.WaitAsync();
 
                         if (stream.Length > 0)
-                        {
+                            {
                             Console.WriteLine("Sent for processing");
                             var rate = 46000;
                             var text = await this.voiceToTextService.ProcessVoiceToText(stream, rate);
@@ -267,16 +291,16 @@ namespace DDBot.Listeners
 
                             // Reset the stream
                             stream.SetLength(0);
+                            }
                         }
-                    }
-                    finally
-                    {
+                        finally
+                        {
                         semaphore.Release();
-                    }
-                });
+                        }
+                    });
             }
         }
-
+                    
         private async Task StreamCreated(ulong userId, AudioInStream audio)
         {
             //var channels = this.discordClient.Guilds.SelectMany(g => g.Channels);
@@ -297,9 +321,9 @@ namespace DDBot.Listeners
 
                 var user = this.discordClient.GetUser(userId);
                 do
+            {
+                try
                 {
-                    try
-                    {
                         // Wait for a frame to show up on the audio channel
                         if(audio.AvailableFrames > 0)
                         {
@@ -328,7 +352,8 @@ namespace DDBot.Listeners
                             await Task.Delay(500);
                         }
                     }
-                    catch (Exception e) { Console.WriteLine(e); }
+                }
+                catch (Exception e) { Console.WriteLine(e); }
 
                 } while (audio.CanRead);
             });
